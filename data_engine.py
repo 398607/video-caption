@@ -265,7 +265,7 @@ def test_data_engine():
         t0 = time.time()
         i += 1
         ids = [engine.train[index] for index in idx]
-        x, mask, ctx, ctx_mask = prepare_data(engine, ids)
+        x, mask, ctx, ctx_mask, a = prepare_data(engine, ids) # modified
         print 'seen %d minibatches, used time %.2f '%(i,time.time()-t0)
         if i == 10:
             break

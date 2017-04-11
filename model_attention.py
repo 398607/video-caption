@@ -5,6 +5,7 @@ import theano
 import theano.tensor as tensor
 import theano.tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
+import theano.d3viz as d3v
 
 import cPickle as pkl
 import numpy
@@ -115,7 +116,7 @@ class Attention(object):
         return params
 
     # This function implements the lstm fprop
-    def lstm_layer(self, tparams, state_below, options, prefix='lstm', mask=None,
+    def lstm_layer(self, tparams, state_below, options, prefix='lstm', mask=None, \
                    forget=False, use_noise=None, trng=None, **kwargs):
         nsteps = state_below.shape[0]
         dim = tparams[_p(prefix,'U')].shape[0]
@@ -178,7 +179,7 @@ class Attention(object):
         return rval
 
     # Conditional LSTM layer with Attention
-    def param_init_lstm_cond(self, options, params,
+    def param_init_lstm_cond(self, options, params, \
                              prefix='lstm_cond', nin=None, dim=None, dimctx=None):
         if nin == None:
             nin = options['dim']
@@ -697,6 +698,9 @@ class Attention(object):
             [next_probs, next_sample]+next_state+next_memory,
             name='f_next', profile=False, mode=mode, on_unused_input='ignore')
         print 'Done'
+
+        d3v.d3viz(f_next, 'f_next.html')
+
         return f_init, f_next
 
     def gen_sample(self, tparams, f_init, f_next, ctx0, ctx_mask, options,
@@ -913,7 +917,7 @@ class Attention(object):
               dataset='youtube2text',
               video_feature='googlenet',
               use_dropout=False,
-              reload_=False,
+              reload_=True,
               from_dir=None,
               K=10,
               OutOf=240,
@@ -969,6 +973,7 @@ class Attention(object):
         print 'building f_log_probs'
         f_log_probs = theano.function([x, mask, ctx, mask_ctx, attr], -cost,
                                       profile=False, on_unused_input='ignore')
+
 
         cost = cost.mean()
         if decay_c > 0.:
