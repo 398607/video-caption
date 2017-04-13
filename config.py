@@ -9,9 +9,9 @@ config = DD({
     # ERASE everything under save_model_path
     'erase_history': True,
     'attention': DD({
-        'reload_': False,
+        'reload_': True,
         'save_model_dir': exp_path + 'delete_gpu3_2/',
-        'from_dir': '',
+        'from_dir': exp_path + 'save/delete_gpu3_2',
         'dataset': 'youtube2text', 
         'video_feature': 'googlenet',
         'dim_word':468, # 474
@@ -24,7 +24,7 @@ config = DD({
         'prev2out':True, 
         'ctx2out':True, 
         'patience':20,
-        'max_epochs':30, 
+        'max_epochs':5, 
         'decay_c':1e-4,
         'alpha_entropy_r': 0.,
         'alpha_c':0.70602,
