@@ -7,6 +7,8 @@ import theano.tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import theano.d3viz as d3v
 
+theano.config.floatX = 'float32'
+
 import cPickle as pkl
 import numpy
 import copy
@@ -520,17 +522,18 @@ class Attention(object):
             tparams, ctx_a, options, prefix='ff_attr', activ='linear')
         attr_cost = ((attr_pred - attr) ** 2).sum(1)
 
+        ctx_mean_2 = ctx_mean
         # initial state/cell
         for lidx in xrange(options['n_layers_init']):
-            ctx_mean = self.get_layer('ff')[1](
-                tparams, ctx_mean, options, prefix='ff_init_%d'%lidx, activ='rectifier')
+            ctx_mean_2 = self.get_layer('ff')[1](
+                tparams, ctx_mean_2, options, prefix='ff_init_%d'%lidx, activ='rectifier')
             if options['use_dropout']:
-                ctx_mean = dropout_layer(ctx_mean, use_noise, trng)
+                ctx_mean_2 = dropout_layer(ctx_mean_2, use_noise, trng)
 
         init_state = self.get_layer('ff')[1](
-            tparams, ctx_mean, options, prefix='ff_state', activ='tanh')
+            tparams, ctx_mean_2, options, prefix='ff_state', activ='tanh')
         init_memory = self.get_layer('ff')[1](
-            tparams, ctx_mean, options, prefix='ff_memory', activ='tanh')
+            tparams, ctx_mean_2, options, prefix='ff_memory', activ='tanh')
         # decoder
         proj = self.get_layer('lstm_cond')[1](tparams, emb, options,
                                          prefix='decoder',
@@ -577,7 +580,13 @@ class Attention(object):
         cost = cost.reshape([x.shape[0], x.shape[1]])
         cost = (cost * mask).sum(0) + 0.1 * attr_cost
         extra = [probs, alphas]
-        return trng, use_noise, x, mask, ctx, mask_ctx, attr, alphas, cost, extra
+        '''
+        trng, use_noise, \
+              x, mask, ctx, mask_ctx, attr, alphas, \
+              cost, extra = \
+              self.build_model(tparams, model_options)
+        '''
+        return trng, use_noise, x, mask, ctx, mask_ctx, attr, alphas, cost, extra, ctx_mean
 
     def build_sampler(self, tparams, options, use_noise, trng, mode=None):
         # context: #annotations x dim
@@ -964,14 +973,18 @@ class Attention(object):
 
         trng, use_noise, \
               x, mask, ctx, mask_ctx, attr, alphas, \
-              cost, extra = \
+              cost, extra, ctx_mean = \
               self.build_model(tparams, model_options)
 
-        print 'buliding sampler'
+        print 'building sampler'
         f_init, f_next = self.build_sampler(tparams, model_options, use_noise, trng)
         # before any regularizer
         print 'building f_log_probs'
         f_log_probs = theano.function([x, mask, ctx, mask_ctx, attr], -cost,
+                                      profile=False, on_unused_input='ignore')
+
+        print '>>> try to build ctx_mean'
+        see_ctx_mean = theano.function([x, mask, ctx, mask_ctx, attr], ctx_mean,
                                       profile=False, on_unused_input='ignore')
 
 
@@ -1030,7 +1043,7 @@ class Attention(object):
         if reload_:
             print 'loading history error...'
             history_errs = numpy.load(
-                from_dir+'model_best_so_far.npz')['history_errs'].tolist()
+                from_dir+'/model_best_so_far.npz')['history_errs'].tolist()
 
         bad_counter = 0
 
@@ -1085,6 +1098,12 @@ class Attention(object):
                 # update params
                 f_update(lrate)
                 ud_duration = time.time() - ud_start
+
+                # >>> after update, try to see ctx_mean
+                # ctx_m = see_ctx_mean(x, mask, ctx, ctx_mask, attr)
+                # print '>>> x shape', x.shape
+                # print '>>> ctx shape', ctx.shape
+                # print '>>> ctx_mean shape', ctx_m.shape
 
                 if eidx == 0:
                     train_error = cost
@@ -1166,6 +1185,7 @@ class Attention(object):
                              history_errs=history_errs, **current_params)
 
                     use_noise.set_value(0.)
+
                     train_err = -1
                     train_perp = -1
                     valid_err = -1

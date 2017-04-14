@@ -2,6 +2,7 @@ import numpy
 import os, sys, socket
 import time
 
+import numpy as np
 from config import config
 from jobman import DD, expand
 import common
@@ -86,7 +87,20 @@ def train_from_scratch(config, state, channel):
     
 def main(state, channel=None):
     set_config(config, state)
-    train_from_scratch(config, state, channel)
+
+    max_iter = 5
+    print '>>> joint training max_iter = %d' % max_iter
+
+    print '>>> prepare W to %dataset_path%/W.pkl'
+    dataset_path = common.get_rab_dataset_base_path()+'youtube2text_iccv15/'
+    W = np.zeros((1536, 100))
+    common.dump_pkl(W, dataset_path+'W.pkl')
+
+    # step 1: train NN
+    for i in range(max_iter):
+        print '>>> iter %d' % i
+        print '>>> train NN'
+        train_from_scratch(config, state, channel)
 
 
 if __name__ == '__main__':

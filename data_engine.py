@@ -265,10 +265,31 @@ def test_data_engine():
         t0 = time.time()
         i += 1
         ids = [engine.train[index] for index in idx]
+        # print '>>> ids as prepare_data(engine, ids)'
+        # print ids
         x, mask, ctx, ctx_mask, a = prepare_data(engine, ids) # modified
         print 'seen %d minibatches, used time %.2f '%(i,time.time()-t0)
         if i == 10:
             break
+    print '>>> test full data set'
+    ids = engine.train
+    print '>>> ids[0:50]'
+    print ids[0:50]
+    x, mask, ctx, ctx_mask, a = prepare_data(engine, ids[0:50])
+    print '>>> shapes for [x, mask, ctx, ctx_mask, a]'
+    print [obj.shape for obj in [x, mask, ctx, ctx_mask, a]]
+    print '>>> test sequence invariance'
+    vid, cid = ids[4].split('_')
+    attr = engine.get_video_attribute(vid)
+    restored_attr = a[4]
+    if (restored_attr == attr).all():
+        print '>>> nice! sequencial invariace satisfied'
+    else:
+        print '>>> whoops, it seems to be wrong'
+        print vid, cid
+        print attr
+        print restored_attr
+
             
     print 'used time %.2f'%(time.time()-t)
 if __name__ == '__main__':

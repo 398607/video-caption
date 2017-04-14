@@ -1,0 +1,1 @@
+rsync -av --progress --rsh='ssh -p 4512' -r --exclude='dataset/' --exclude='result/' --exclude='d3viz/' --exclude='.git/' --include='*.py' kesu@ml.cs.tsinghua.edu.cn:/home/kesu/yinpeng/video-caption/ ./

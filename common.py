@@ -8,6 +8,7 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams
 
 # the dir where there should be a subdir named 'youtube2text_iccv15'
 RAB_DATASET_BASE_PATH = '/home/kesu/yinpeng/video-caption/dataset/'
+# RAB_DATASET_BASE_PATH = '/mnt/d/S/playing/lab/yinpeng/video-caption/dataset/'
 # the dir where all the experiment data is dumped.
 RAB_EXP_PATH = '/home/kesu/yinpeng/video-caption/result/'
 
