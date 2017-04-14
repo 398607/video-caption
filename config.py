@@ -9,7 +9,7 @@ config = DD({
     # ERASE everything under save_model_path
     'erase_history': True,
     'attention': DD({
-        'reload_': False,
+        'reload_': True,
         'save_model_dir': exp_path + 'delete_gpu3_2/',
         'from_dir': exp_path + 'delete_gpu3_2',
         'dataset': 'youtube2text', 
