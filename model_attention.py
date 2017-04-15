@@ -582,7 +582,7 @@ class Attention(object):
         cost = -tensor.log(probs[T.arange(x_flat.shape[0]), x_flat] + 1e-8)
 
         cost = cost.reshape([x.shape[0], x.shape[1]])
-        cost = (cost * mask).sum(0) + 0.1 * attr_cost
+        cost = (cost * mask).sum(0) + 0.01 * attr_cost
         extra = [probs, alphas]
         '''
         trng, use_noise, \
@@ -605,6 +605,18 @@ class Attention(object):
 
         if options['encoder'] == 'lstm_bi':
             # encoder
+            ''' in build_model():
+            ctx_fwd = self.get_layer('lstm')[1](tparams, ctx_.dimshuffle(1,0,2),
+                                           options, mask=mask_ctx.dimshuffle(1,0),
+                                           prefix='encoder')[0]
+            ctx_rev = self.get_layer('lstm')[1](tparams, ctx_.dimshuffle(1,0,2)[::-1],
+                                                options, mask=mask_ctx.dimshuffle(1,0)[::-1],
+                                                prefix='encoder_rev')[0]
+            ctx0 = concatenate((ctx_fwd, ctx_rev[::-1]), axis=2)
+            ctx0 = ctx0.dimshuffle(1,0,2)
+            # ctx0 = concatenate((ctx_, ctx0), axis=2)
+            ctx_mean = ctx0.sum(1)/counts
+            '''
             ctx_fwd = self.get_layer('lstm')[1](tparams, ctx_,
                                            options, mask=ctx_mask,
                                            prefix='encoder',forget=False)[0]
@@ -639,17 +651,17 @@ class Attention(object):
         ctx = ctx.dimshuffle('x', 0, 1)
 
         # initial state/cell
+        ctx_mean_2 = ctx_mean
         for lidx in xrange(options['n_layers_init']):
-            ctx_mean = self.get_layer('ff')[1](
-                tparams, ctx_mean, options, prefix='ff_init_%d'%lidx, activ='rectifier')
+            ctx_mean_2 = self.get_layer('ff')[1](
+                tparams, ctx_mean_2, options, prefix='ff_init_%d'%lidx, activ='rectifier')
             if options['use_dropout']:
-                ctx_mean = dropout_layer(ctx_mean, use_noise, trng)
+                ctx_mean_2 = dropout_layer(ctx_mean_2, use_noise, trng)
         init_state = [self.get_layer('ff')[1](
-            tparams, ctx_mean, options, prefix='ff_state', activ='tanh')]
+            tparams, ctx_mean_2, options, prefix='ff_state', activ='tanh')]
         init_memory = [self.get_layer('ff')[1](
-            tparams, ctx_mean, options, prefix='ff_memory', activ='tanh')]
+            tparams, ctx_mean_2, options, prefix='ff_memory', activ='tanh')]
         
-
         print 'Building f_init...',
         f_init = theano.function(
             [ctx0, ctx_mask],
@@ -712,7 +724,7 @@ class Attention(object):
             name='f_next', profile=False, mode=mode, on_unused_input='ignore')
         print 'Done'
 
-        d3v.d3viz(f_next, 'f_next.html')
+        # d3v.d3viz(f_next, 'f_next.html')
 
         return f_init, f_next
 
@@ -1401,7 +1413,7 @@ class Attention(object):
 
         print '>>> dump ctx_mean end'
 
-        return train_err, valid_err, test_err
+        return self.engine
     
 
 def train_from_scratch(state, channel):

@@ -174,6 +174,25 @@ class Movie2Caption(object):
             len(self.valid), self.mb_size_test)
         self.kf_test = common.generate_minibatch_idx(
             len(self.test), self.mb_size_test)
+
+def get_all_VA_data(engine, ctx_mean):
+
+    ctx_list = []
+    attr_list = []
+
+    for id in engine.train_ids:
+        vid, cid = id.split('_')
+        attr = engine.get_video_attribute(vid)
+        ctx = ctx_mean[vid]
+        attr_list.append(attr)
+        ctx_list.append(ctx)
+
+    V = numpy.asarray(ctx_list)
+    A = numpy.asarray(attr_list)
+    print '>>> get_all_VA_data'
+    print 'V shape', V.shape
+    print 'A shape', A.shape
+    return V, A
         
 def prepare_data(engine, IDs):
     seqs = []

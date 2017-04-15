@@ -9,7 +9,7 @@ config = DD({
     # ERASE everything under save_model_path
     'erase_history': True,
     'attention': DD({
-        'reload_': False,
+        'reload_': False, ########################################## reload
         'save_model_dir': exp_path + 'delete_gpu3_2/',
         'from_dir': exp_path + 'delete_gpu3_2',
         'dataset': 'youtube2text', 
@@ -24,7 +24,7 @@ config = DD({
         'prev2out':True, 
         'ctx2out':True, 
         'patience':20,
-        'max_epochs':5, ############################################ max_epochs
+        'max_epochs':1, ############################################ max_epochs
         'decay_c':1e-4,
         'alpha_entropy_r': 0.,
         'alpha_c':0.70602,
@@ -47,6 +47,6 @@ config = DD({
         'K':28, # 26 when compare
         'OutOf':None, # used to be 240, for motionfeature use 26
         'verbose': True,
-        'debug': False,
+        'debug': False, ########################################### debug
         }),
     })

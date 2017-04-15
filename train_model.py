@@ -7,6 +7,7 @@ from config import config
 from jobman import DD, expand
 import common
 import model_attention
+from data_engine import get_all_VA_data
 
     
 def set_config(conf, args, add_new_key=False):
@@ -82,9 +83,33 @@ def train_from_scratch(config, state, channel):
     print 'Host:    %s' % socket.gethostname()
     print 'Command: %s' % ' '.join(sys.argv)
     if config.model == 'attention':
-        model_attention.train_from_scratch(state, channel)
+        return model_attention.train_from_scratch(state, channel)
     else:
         raise NotImplementedError()
+
+def train_W(W, engine, ctx_mean, max_iter=100):
+    print '>>> get VA data'
+    V, A = get_all_VA_data(engine, ctx_mean)
+    lam = 1.0
+    a = 1.0
+
+    def calW(W, V, A):
+        L = ((A - np.dot(V, W))**2).sum()
+        R = np.absolute(W).sum()
+        print '>>> calW, L %.4f, R %.4f'
+        return L + 0.1 * R
+    
+    def soft(vec, a):
+        w = np.maximum(0, np.absolute(vec) - a)
+        return np.sign(vec) * w
+
+    for iter in range(max_iter):
+        if iter % 10 == 0: 
+            print '>>> training W, iter %d, loss %.4f' % iter, calW(W, V, A)
+        
+        W = soft(np.dot(np.eye(512) - 1./a*np.dot(V.T, V), W) + 1./a*np.dot(V.T, A), lam / a)
+
+    print '>>> train_W returns'
         
     
 def main(state, channel=None):
@@ -103,7 +128,7 @@ def main(state, channel=None):
     for i in range(max_iter):
         print '>>> iter %d' % i
         print '>>> step #1: train NN'
-        train_from_scratch(config, state, channel)
+        engine = train_from_scratch(config, state, channel)
         print '>>> step #1 finished'
 
         print '>>> test load ctx_mean'
@@ -111,6 +136,13 @@ def main(state, channel=None):
         print 'len(ctx_mean)', len(ctx_mean)
         print 'ctx_mean[vid262].shape', ctx_mean['vid262'].shape
         print '>>> test finished'
+
+        print '>>> step #2-2: train W'
+        print '>>> load W'
+        W = common.load_pkl(common.get_rab_dataset_base_path()+'youtube2text_iccv15/W.pkl')
+        train_W(W, engine, ctx_mean)
+        common.dump_pkl(W, common.get_rab_dataset_base_path()+'youtube2text_iccv15/W.pkl')
+        print '>>> step #2-2 finished'
 
 
 
