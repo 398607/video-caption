@@ -66,8 +66,10 @@ def train_from_scratch(config, state, channel):
         config[config.model].from_dir = from_dir_backup
         config[config.model].reload_ = True
     if config.erase_history:
-        print 'erasing everything in ',save_model_dir
-        os.system('rm %s/*'%save_model_dir)
+        print '>>> NOT erasing everything in ', save_model_dir
+        print '>>> INSTEAD, earse all txt files in ', save_model_dir
+        os.system('rm %s/*.txt' % save_model_dir)
+        # os.system('rm %s/*'%save_model_dir)
     # for stdout file logging
     #sys.stdout = Unbuffered(sys.stdout, state.save_model_path + 'stdout.log')
     print 'saving model config into %s'%save_path
@@ -88,19 +90,28 @@ def train_from_scratch(config, state, channel):
 def main(state, channel=None):
     set_config(config, state)
 
-    max_iter = 5
+    max_iter = 1
     print '>>> joint training max_iter = %d' % max_iter
 
     print '>>> prepare W to %dataset_path%/W.pkl'
     dataset_path = common.get_rab_dataset_base_path()+'youtube2text_iccv15/'
-    W = np.zeros((1536, 100))
+    W = np.random.random((512, 100)).astype('float32')
     common.dump_pkl(W, dataset_path+'W.pkl')
+    print '>>> W dumped'
 
     # step 1: train NN
     for i in range(max_iter):
         print '>>> iter %d' % i
-        print '>>> train NN'
+        print '>>> step #1: train NN'
         train_from_scratch(config, state, channel)
+        print '>>> step #1 finished'
+
+        print '>>> test load ctx_mean'
+        ctx_mean = common.load_pkl(common.get_rab_dataset_base_path()+'youtube2text_iccv15/ctx_mean.pkl')
+        print 'len(ctx_mean)', len(ctx_mean)
+        print 'ctx_mean[vid262].shape', ctx_mean['vid262'].shape
+        print '>>> test finished'
+
 
 
 if __name__ == '__main__':

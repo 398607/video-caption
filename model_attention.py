@@ -405,7 +405,7 @@ class Attention(object):
                                           nin=options['ctx_dim'], dim=options['encoder_dim'])
             params = self.get_layer('lstm')[0](options, params, prefix='encoder_rev',
                                           nin=options['ctx_dim'], dim=options['encoder_dim'])
-            ctx_dim = options['encoder_dim'] * 2 + options['ctx_dim']
+            ctx_dim = options['encoder_dim'] * 2 # + options['ctx_dim']
 
         elif options['encoder'] == 'lstm_uni':
             print 'uni-directional lstm encoder on ctx'
@@ -470,6 +470,8 @@ class Attention(object):
         mask_ctx.tag.test_value = self.ctx_mask_tv
         attr = tensor.matrix('a', dtype='float32')
         attr.tag.test_value = self.attr_tv
+        WW = tensor.matrix('WW', dtype='float32')
+        WW.tag.test_value = self.W
         n_timesteps = x.shape[0]
         n_samples = x.shape[1]
 
@@ -493,7 +495,7 @@ class Attention(object):
                                                 prefix='encoder_rev')[0]
             ctx0 = concatenate((ctx_fwd, ctx_rev[::-1]), axis=2)
             ctx0 = ctx0.dimshuffle(1,0,2)
-            ctx0 = concatenate((ctx_, ctx0), axis=2)
+            # ctx0 = concatenate((ctx_, ctx0), axis=2)
             ctx_mean = ctx0.sum(1)/counts
         elif options['encoder'] == 'lstm_uni':
             ctx0 = self.get_layer('lstm')[1](tparams, ctx_.dimshuffle(1,0,2),
@@ -514,13 +516,15 @@ class Attention(object):
         attr_pred = self.get_layer('ff')[1](
             tparams, ctx_mean, options, prefix='ff_attr', activ='linear')
         '''
-        ctx_a = self.get_layer('ff')[1](
-            tparams, ctx_mean, options, prefix='ff_transform', activ='rectifier')
-        if options['use_dropout']:
-            ctx_a = dropout_layer(ctx_a, use_noise, trng)
-        attr_pred = self.get_layer('ff')[1](
-            tparams, ctx_a, options, prefix='ff_attr', activ='linear')
-        attr_cost = ((attr_pred - attr) ** 2).sum(1)
+        # ctx_a = self.get_layer('ff')[1](
+        #      tparams, ctx_mean, options, prefix='ff_transform', activ='rectifier')
+        # if options['use_dropout']:
+        #     ctx_a = dropout_layer(ctx_a, use_noise, trng)
+        # attr_pred = self.get_layer('ff')[1]( tparams, ctx_a, options, prefix='ff_attr', activ='linear')
+        # attr_cost = ((attr_pred - attr) ** 2).sum(axis=1)
+
+        # >>> attr_cost =  ||z - Wv||_2^2
+        attr_cost = ((tensor.dot(ctx_mean, WW) - attr) ** 2).sum(axis=1)
 
         ctx_mean_2 = ctx_mean
         # initial state/cell
@@ -586,7 +590,7 @@ class Attention(object):
               cost, extra = \
               self.build_model(tparams, model_options)
         '''
-        return trng, use_noise, x, mask, ctx, mask_ctx, attr, alphas, cost, extra, ctx_mean
+        return trng, use_noise, x, mask, ctx, mask_ctx, attr, WW, alphas, cost, extra, ctx_mean
 
     def build_sampler(self, tparams, options, use_noise, trng, mode=None):
         # context: #annotations x dim
@@ -609,7 +613,7 @@ class Attention(object):
                                            forget=False,
                                            prefix='encoder_rev')[0]
             ctx = concatenate((ctx_fwd, ctx_rev[::-1]), axis=1)
-            ctx = concatenate((ctx_, ctx), axis=1)
+            # ctx = concatenate((ctx_, ctx), axis=1)
             ctx_mean = ctx.sum(0)/counts
             #ctx = ctx.dimshuffle('x',0,1)
         elif options['encoder'] == 'lstm_uni':
@@ -875,9 +879,9 @@ class Attention(object):
         n_samples = numpy.sum([len(index) for index in iterator])
         for index in iterator:
             tag = [tags[i] for i in index]
-            x, mask, ctx, ctx_mask, attr = data_engine.prepare_data(
+            x, mask, ctx, ctx_mask, attr, W = data_engine.prepare_data(
                 self.engine, tag)
-            pred_probs = f_log_probs(x, mask, ctx, ctx_mask, attr)
+            pred_probs = f_log_probs(x, mask, ctx, ctx_mask, attr, W)
             L.append(mask.sum(0).tolist())
             NLL.append((-1 * pred_probs).tolist())
             probs.append(pred_probs.tolist())
@@ -954,9 +958,9 @@ class Attention(object):
         # set test values, for debugging
         idx = self.engine.kf_train[0]
         [self.x_tv, self.mask_tv,
-         self.ctx_tv, self.ctx_mask_tv, self.attr_tv] = data_engine.prepare_data(
+         self.ctx_tv, self.ctx_mask_tv, self.attr_tv, self.W] = data_engine.prepare_data(
             self.engine, [self.engine.train[index] for index in idx])
-        print self.x_tv.shape, self.mask_tv.shape, self.ctx_tv.shape, self.ctx_mask_tv.shape, self.attr_tv.shape
+        print self.x_tv.shape, self.mask_tv.shape, self.ctx_tv.shape, self.ctx_mask_tv.shape, self.attr_tv.shape, self.W.shape
 
         print 'init params'
         t0 = time.time()
@@ -972,7 +976,7 @@ class Attention(object):
         tparams = init_tparams(params)
 
         trng, use_noise, \
-              x, mask, ctx, mask_ctx, attr, alphas, \
+              x, mask, ctx, mask_ctx, attr, W, alphas, \
               cost, extra, ctx_mean = \
               self.build_model(tparams, model_options)
 
@@ -980,11 +984,11 @@ class Attention(object):
         f_init, f_next = self.build_sampler(tparams, model_options, use_noise, trng)
         # before any regularizer
         print 'building f_log_probs'
-        f_log_probs = theano.function([x, mask, ctx, mask_ctx, attr], -cost,
+        f_log_probs = theano.function([x, mask, ctx, mask_ctx, attr, W], -cost,
                                       profile=False, on_unused_input='ignore')
 
         print '>>> try to build ctx_mean'
-        see_ctx_mean = theano.function([x, mask, ctx, mask_ctx, attr], ctx_mean,
+        see_ctx_mean = theano.function([x, mask, ctx, mask_ctx, attr, W], ctx_mean,
                                       profile=False, on_unused_input='ignore')
 
 
@@ -1011,7 +1015,7 @@ class Attention(object):
         else:
             alpha_reg_2 = tensor.zeros_like(cost)
         print 'building f_alpha'
-        f_alpha = theano.function([x, mask, ctx, mask_ctx, attr],
+        f_alpha = theano.function([x, mask, ctx, mask_ctx, attr, W],
                                   [alphas, alpha_reg_2],
                                   name='f_alpha',
                                   on_unused_input='ignore')
@@ -1032,7 +1036,7 @@ class Attention(object):
         lr = tensor.scalar(name='lr')
         print 'build train fns'
         f_grad_shared, f_update = eval(optimizer)(lr, tparams, grads,
-                                                  [x, mask, ctx, mask_ctx, attr], cost,
+                                                  [x, mask, ctx, mask_ctx, attr, W], cost,
                                                   extra + grads)
 
         print 'compilation took %.4f sec'%(time.time()-t0)
@@ -1072,7 +1076,7 @@ class Attention(object):
                 use_noise.set_value(1.)
 
                 pd_start = time.time()
-                x, mask, ctx, ctx_mask, attr = data_engine.prepare_data(
+                x, mask, ctx, ctx_mask, attr, W = data_engine.prepare_data(
                     self.engine, tags)
                 pd_duration = time.time() - pd_start
                 if x is None:
@@ -1080,7 +1084,7 @@ class Attention(object):
                     continue
 
                 ud_start = time.time()
-                rvals = f_grad_shared(x, mask, ctx, ctx_mask, attr)
+                rvals = f_grad_shared(x, mask, ctx, ctx_mask, attr, W)
                 cost = rvals[0]
                 probs = rvals[1]
                 alphas = rvals[2]
@@ -1115,7 +1119,7 @@ class Attention(object):
                     print 'Epoch ', eidx, 'Update ', uidx, 'Train cost mean so far', \
                       train_error, 'fetching data time spent (sec)', pd_duration, \
                       'update time spent (sec)', ud_duration, 'save_dir', save_model_dir
-                    alphas,reg = f_alpha(x, mask, ctx, ctx_mask, attr)
+                    alphas,reg = f_alpha(x, mask, ctx, ctx_mask, attr, W)
                     print 'alpha ratio %.3f, reg %.3f'%(
                         alphas.min(-1).mean() / (alphas.max(-1)).mean(), reg)
                 if numpy.mod(uidx, saveFreq) == 0:
@@ -1131,12 +1135,13 @@ class Attention(object):
                             ctx_s = ctx
                             ctx_mask_s = ctx_mask
                             attr_s = attr
+                            W_s = W
 
                         elif from_which == 'valid':
                             idx = self.engine.kf_valid[numpy.random.randint(
                                 1, len(self.engine.kf_valid) - 1)]
                             tags = [self.engine.valid[index] for index in idx]
-                            x_s, mask_s, ctx_s, ctx_mask_s, attr_s = data_engine.prepare_data(
+                            x_s, mask_s, ctx_s, ctx_mask_s, attr_s, W_s = data_engine.prepare_data(
                                 self.engine, tags)
 
                         stochastic = False
@@ -1174,7 +1179,7 @@ class Attention(object):
 
                 if validFreq != -1 and numpy.mod(uidx, validFreq) == 0:
                     t0_valid = time.time()
-                    alphas,_ = f_alpha(x, mask, ctx, ctx_mask, attr)
+                    alphas,_ = f_alpha(x, mask, ctx, ctx_mask, attr, W)
                     ratio = alphas.min(-1).mean()/(alphas.max(-1)).mean()
                     alphas_ratio.append(ratio)
                     numpy.savetxt(save_model_dir+'alpha_ratio.txt',alphas_ratio)
@@ -1274,6 +1279,7 @@ class Attention(object):
                                          valid_B4, valid_meteor, valid_Rouge, valid_Cider,
                                          test_B1, test_B2, test_B3,
                                          test_B4, test_meteor, test_Rouge, test_Cider])
+
                     numpy.savetxt(save_model_dir+'train_valid_test.txt',
                                   history_errs, fmt='%.3f')
                     print 'save validation results to %s'%save_model_dir
@@ -1359,8 +1365,44 @@ class Attention(object):
             best_valid_idx = history[:,6].argmin()
             numpy.savetxt(save_model_dir+'train_valid_test.txt', history, fmt='%.4f')
             print 'final best exp ', history[best_valid_idx]
+        
+        print '>>> dump ctx_mean after training process'
+        ctx_save = dict()
+        train_ids = self.engine.train
+        print '>>> ids[0:50]'
+        print ids[0:50]
+        k, size = 0, 50
+
+        while k + size < len(train_ids):
+            print '>>> k, k + size:', k, k + size
+            ids = train_ids[k:k+size]
+            x,  mask, ctx, ctx_mask, a, W = prepare_data(engine, ids)
+            ctx_seen = see_ctx_mean(x, mask, ctx, ctx_mask, a, W)
+            print '>>> ctx_seen shape'
+            print ctx_seen.shape
+            for i, id in enumerate(ids):
+                vid, cid = id.split('_')
+                if vid not in ctx_save:
+                    ctx_save[vid] = ctx_seen[i]
+            k += size
+
+        if k < len(train_ids):
+            print '>>> k, len(train_ids):', k, len(train_ids)
+            ids = train_ids[k:len(train_ids)]
+            x,  mask, ctx, ctx_mask, a, W = prepare_data(engine, ids)
+            ctx_seen = see_ctx_mean(x, mask, ctx, ctx_mask, a, W)
+            print '>>> ctx_seen shape'
+            print ctx_seen.shape
+            for i, id in enumerate(ids):
+                vid, cid = id.split('_')
+                if vid not in ctx_save:
+                    ctx_save[vid] = ctx_seen[i]
+        common.dump_pkl(ctx_save, common.get_rab_dataset_base_path()+'youtube2text_iccv15/ctx_mean.pkl')
+
+        print '>>> dump ctx_mean end'
 
         return train_err, valid_err, test_err
+    
 
 def train_from_scratch(state, channel):
     t0 = time.time()

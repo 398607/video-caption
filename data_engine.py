@@ -148,6 +148,7 @@ class Movie2Caption(object):
             self.CAP = common.load_pkl(dataset_path + 'CAP.pkl')
             self.FEAT = common.load_pkl(dataset_path + 'FEAT_key_vidID_value_features.pkl')
             self.ATTR = common.load_pkl(dataset_path + 'attribute.pkl')
+            self.W = common.load_pkl(dataset_path+'W.pkl')
             self.train_ids = ['vid%s'%i for i in range(1,1201)]
             self.valid_ids = ['vid%s'%i for i in range(1201,1301)]
             self.test_ids = ['vid%s'%i for i in range(1301,1971)]
@@ -238,11 +239,12 @@ def prepare_data(engine, IDs):
 
     x = numpy.zeros((maxlen, n_samples)).astype('int64')
     x_mask = numpy.zeros((maxlen, n_samples)).astype('float32')
+    W = numpy.asmatrix(engine.W).astype('float32')
     for idx, s in enumerate(seqs):
         x[:lengths[idx],idx] = s
         x_mask[:lengths[idx]+1,idx] = 1.
     
-    return x, x_mask, y, y_mask, a
+    return x, x_mask, y, y_mask, a, W
     
 def test_data_engine():
     #from sklearn.cross_validation import KFold
@@ -267,7 +269,7 @@ def test_data_engine():
         ids = [engine.train[index] for index in idx]
         # print '>>> ids as prepare_data(engine, ids)'
         # print ids
-        x, mask, ctx, ctx_mask, a = prepare_data(engine, ids) # modified
+        x, mask, ctx, ctx_mask, a, W = prepare_data(engine, ids) # modified
         print 'seen %d minibatches, used time %.2f '%(i,time.time()-t0)
         if i == 10:
             break
@@ -275,9 +277,9 @@ def test_data_engine():
     ids = engine.train
     print '>>> ids[0:50]'
     print ids[0:50]
-    x, mask, ctx, ctx_mask, a = prepare_data(engine, ids[0:50])
-    print '>>> shapes for [x, mask, ctx, ctx_mask, a]'
-    print [obj.shape for obj in [x, mask, ctx, ctx_mask, a]]
+    x, mask, ctx, ctx_mask, a, W = prepare_data(engine, ids[0:50])
+    print '>>> shapes for [x, mask, ctx, ctx_mask, a, W]'
+    print [obj.shape for obj in [x, mask, ctx, ctx_mask, a, W]]
     print '>>> test sequence invariance'
     vid, cid = ids[4].split('_')
     attr = engine.get_video_attribute(vid)
