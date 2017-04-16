@@ -2,6 +2,8 @@ import numpy
 import os, sys, socket
 import time
 
+from alter_vision import Alter
+
 import numpy as np
 from config import config
 from jobman import DD, expand
@@ -69,7 +71,7 @@ def train_from_scratch(config, state, channel):
     if config.erase_history:
         print '>>> NOT erasing everything in ', save_model_dir
         print '>>> INSTEAD, earse all txt files in ', save_model_dir
-        os.system('rm %s/*.txt' % save_model_dir)
+        os.system('rm %s*.txt' % save_model_dir)
         # os.system('rm %s/*'%save_model_dir)
     # for stdout file logging
     #sys.stdout = Unbuffered(sys.stdout, state.save_model_path + 'stdout.log')
@@ -97,6 +99,7 @@ def train_W(W, engine, ctx_mean, max_iter=100):
         L = ((A - np.dot(V, W))**2).sum()
         R = np.absolute(W).sum()
         print '>>> calW, L %.4f, R %.4f'
+        Alter.vision('>>> calW, L %.4f, R %.4f')
         return L + 0.1 * R
     
     def soft(vec, a):
@@ -105,7 +108,9 @@ def train_W(W, engine, ctx_mean, max_iter=100):
 
     for iter in range(max_iter):
         if iter % 10 == 0: 
-            print '>>> training W, iter %d, loss %.4f' % iter, calW(W, V, A)
+            loss = calW(W, V, A)
+            print '>>> training W, iter %d, loss %.4f' % (iter, loss)
+            Alter.vision('>>> training W, iter %d, loss %.4f' % (iter, loss))
         
         W = soft(np.dot(np.eye(512) - 1./a*np.dot(V.T, V), W) + 1./a*np.dot(V.T, A), lam / a)
 
@@ -128,21 +133,29 @@ def main(state, channel=None):
     for i in range(max_iter):
         print '>>> iter %d' % i
         print '>>> step #1: train NN'
+        Alter.vision('>>> step #1: train NN')
         engine = train_from_scratch(config, state, channel)
         print '>>> step #1 finished'
+        Alter.vision('>>> step #1 finished')
 
         print '>>> test load ctx_mean'
+        Alter.vision('>>> test load ctx_mean')
         ctx_mean = common.load_pkl(common.get_rab_dataset_base_path()+'youtube2text_iccv15/ctx_mean.pkl')
         print 'len(ctx_mean)', len(ctx_mean)
+        Alter.vision(' '.join(['>>> len(ctx_mean)', str(len(ctx_mean))]))
         print 'ctx_mean[vid262].shape', ctx_mean['vid262'].shape
+        Alter.vision(' '.join(['ctx_mean[vid262].shape', str(ctx_mean['vid262'].shape)]))
         print '>>> test finished'
+        Alter.vision('>>> test load ctx_mean finished')
 
         print '>>> step #2-2: train W'
+        Alter.vision('>>> step #2-2: train W')
         print '>>> load W'
         W = common.load_pkl(common.get_rab_dataset_base_path()+'youtube2text_iccv15/W.pkl')
         train_W(W, engine, ctx_mean)
         common.dump_pkl(W, common.get_rab_dataset_base_path()+'youtube2text_iccv15/W.pkl')
         print '>>> step #2-2 finished'
+        Alter.vision('>>> step #2-2 finished')
 
 
 

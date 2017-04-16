@@ -38,7 +38,7 @@ config = DD({
         'valid_batch_size':200,
         # in the unit of minibatches
         'dispFreq':10,
-        'validFreq':1000,
+        'validFreq':50, ###################################################debugging
         'saveFreq':-1, # this is disabled, now use sampleFreq instead
         'sampleFreq':100,
         # blue, meteor, or both

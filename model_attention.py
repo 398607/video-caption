@@ -9,6 +9,8 @@ import theano.d3viz as d3v
 
 theano.config.floatX = 'float32'
 
+from alter_vision import Alter
+
 import cPickle as pkl
 import numpy
 import copy
@@ -959,6 +961,7 @@ class Attention(object):
             pkl.dump(model_options, f)
 
         print 'Loading data'
+        Alter.vision('loading data')
         self.engine = data_engine.Movie2Caption('attention', dataset,
                                            video_feature,
                                            batch_size, valid_batch_size,
@@ -1052,6 +1055,7 @@ class Attention(object):
                                                   extra + grads)
 
         print 'compilation took %.4f sec'%(time.time()-t0)
+        Alter.vision('compilation took %.4f sec'%(time.time()-t0))
         print 'Optimization'
 
         history_errs = []
@@ -1081,7 +1085,9 @@ class Attention(object):
             train_costs = []
             grads_record = []
             print 'Epoch ', eidx
-            for idx in self.engine.kf_train:
+            print '>>> WARNING: self.engine.kf_train[-55:]'
+            Alter.vision('>>> WARNING: self.engine.kf_train[-55:]')
+            for idx in self.engine.kf_train[-55:]:  ############################### debugging
                 tags = [self.engine.train[index] for index in idx]
                 n_samples += len(tags)
                 uidx += 1
@@ -1131,6 +1137,7 @@ class Attention(object):
                     print 'Epoch ', eidx, 'Update ', uidx, 'Train cost mean so far', \
                       train_error, 'fetching data time spent (sec)', pd_duration, \
                       'update time spent (sec)', ud_duration, 'save_dir', save_model_dir
+                    Alter.vision('Epoch %d-%d, cost %.5f'%(eidx, uidx, train_error))
                     alphas,reg = f_alpha(x, mask, ctx, ctx_mask, attr, W)
                     print 'alpha ratio %.3f, reg %.3f'%(
                         alphas.min(-1).mean() / (alphas.max(-1)).mean(), reg)
@@ -1141,6 +1148,7 @@ class Attention(object):
                     use_noise.set_value(0.)
                     def sample_execute(from_which):
                         print '------------- sampling from %s ----------'%from_which
+                        Alter.vision('sampling')
                         if from_which == 'train':
                             x_s = x
                             mask_s = mask
@@ -1190,6 +1198,8 @@ class Attention(object):
                     sample_execute(from_which='valid')
 
                 if validFreq != -1 and numpy.mod(uidx, validFreq) == 0:
+                    Alter.vision('validation')
+
                     t0_valid = time.time()
                     alphas,_ = f_alpha(x, mask, ctx, ctx_mask, attr, W)
                     ratio = alphas.min(-1).mean()/(alphas.max(-1)).mean()
@@ -1211,7 +1221,7 @@ class Attention(object):
                     test_perp = -1
                     if not debug:
                         # first compute train cost
-                        if 1:
+                        if 0: # not computing train cost
                             print 'computing cost on trainset'
                             train_err, train_perp = self.pred_probs(
                                 'train', f_log_probs,
@@ -1228,7 +1238,7 @@ class Attention(object):
                         else:
                             valid_err = 0.
                             valid_perp = 0.
-                        if 1:
+                        if 0: # not computing test cost
                             print 'testing...'
                             test_err, test_perp = self.pred_probs(
                                 'test', f_log_probs,
@@ -1248,7 +1258,7 @@ class Attention(object):
                         engine=self.engine,
                         save_dir=save_model_dir,
                         beam=5, n_process=5,
-                        whichset='both',
+                        whichset='valid',
                         on_cpu=False,
                         uidx=uidx,
                         processes=processes, queue=queue, rqueue=rqueue,
@@ -1274,13 +1284,13 @@ class Attention(object):
                     valid_Rouge = scores['valid']['ROUGE_L']
                     valid_Cider = scores['valid']['CIDEr']
                     valid_meteor = scores['valid']['METEOR']
-                    test_B1 = scores['test']['Bleu_1']
-                    test_B2 = scores['test']['Bleu_2']
-                    test_B3 = scores['test']['Bleu_3']
-                    test_B4 = scores['test']['Bleu_4']
-                    test_Rouge = scores['test']['ROUGE_L']
-                    test_Cider = scores['test']['CIDEr']
-                    test_meteor = scores['test']['METEOR']
+                    test_B1 = 0 # scores['test']['Bleu_1']
+                    test_B2 = 0 # scores['test']['Bleu_2']
+                    test_B3 = 0 # scores['test']['Bleu_3']
+                    test_B4 = 0 # scores['test']['Bleu_4']
+                    test_Rouge = 0 # scores['test']['ROUGE_L']
+                    test_Cider = 0 # scores['test']['CIDEr']
+                    test_meteor = 0 # scores['test']['METEOR']
                     print 'computing meteor/blue score used %.4f sec, '\
                       'blue score: %.1f, meteor score: %.1f'%(
                     time.time()-blue_t0, valid_B4, valid_meteor)
@@ -1296,13 +1306,13 @@ class Attention(object):
                                   history_errs, fmt='%.3f')
                     print 'save validation results to %s'%save_model_dir
                     # save best model according to the best blue or meteor
-                    if len(history_errs) > 1 and \
+                    if len(history_errs) == 1 or \
                       valid_B4 > numpy.array(history_errs)[:-1,11].max():
                         print 'Saving to %s...'%save_model_dir,
                         numpy.savez(
                             save_model_dir+'model_best_blue_or_meteor.npz',
                             history_errs=history_errs, **current_params)
-                    if len(history_errs) > 1 and \
+                    if len(history_errs) == 1 or \
                       valid_err < numpy.array(history_errs)[:-1,6].min():
                         best_p = unzip(tparams)
                         bad_counter = 0
@@ -1316,7 +1326,7 @@ class Attention(object):
                         with open('%smodel_options.pkl'%save_model_dir, 'wb') as f:
                             pkl.dump(model_options, f)
                         print 'Done'
-                    elif len(history_errs) > 1 and \
+                    elif len(history_errs) == 1 or \
                         valid_err >= numpy.array(history_errs)[:-1,6].min():
                         bad_counter += 1
                         print 'history best ',numpy.array(history_errs)[:,6].min()
@@ -1332,7 +1342,9 @@ class Attention(object):
 
                     print 'Train ', train_err, 'Valid ', valid_err, 'Test ', test_err, \
                       'best valid err so far',best_valid_err
+                    Alter.vision('validation time %.2f, error:\ntrain %.4f\nvalid %.4f\ntest%.4f'%(time.time() - t0_valid, train_err, valid_err, test_err))
                     print 'valid took %.2f sec'%(time.time() - t0_valid)
+
                     # end of validatioin
                 if debug:
                     break
@@ -1346,6 +1358,7 @@ class Attention(object):
                 n_samples, numpy.mean(train_costs))
         # end for loop over epochs
         print 'Optimization ended.'
+        Alter.vision('Optimization ended.')
         if best_p is not None:
             zipp(best_p, tparams)
 
@@ -1379,18 +1392,21 @@ class Attention(object):
             print 'final best exp ', history[best_valid_idx]
         
         print '>>> dump ctx_mean after training process'
+        Alter.vision('>>> dump ctx_mean after training process')
         ctx_save = dict()
         train_ids = self.engine.train
-        print '>>> ids[0:50]'
-        print ids[0:50]
+        # print '>>> train_ids[0:50]'
+        # print train_ids[0:50]
         k, size = 0, 50
 
         while k + size < len(train_ids):
             print '>>> k, k + size:', k, k + size
+            Alter.vision('>>> k, k + size: %d, %d'%(k, k + size))
             ids = train_ids[k:k+size]
             x,  mask, ctx, ctx_mask, a, W = prepare_data(engine, ids)
             ctx_seen = see_ctx_mean(x, mask, ctx, ctx_mask, a, W)
             print '>>> ctx_seen shape'
+            Alter.vision('>>> ctx_seen shape ' + str(ctx_seen.shape))
             print ctx_seen.shape
             for i, id in enumerate(ids):
                 vid, cid = id.split('_')
@@ -1400,10 +1416,13 @@ class Attention(object):
 
         if k < len(train_ids):
             print '>>> k, len(train_ids):', k, len(train_ids)
+
+            Alter.vision('>>> k, len(train_ids): %d, %d'%(k, len(train_ids)))
             ids = train_ids[k:len(train_ids)]
             x,  mask, ctx, ctx_mask, a, W = prepare_data(engine, ids)
             ctx_seen = see_ctx_mean(x, mask, ctx, ctx_mask, a, W)
             print '>>> ctx_seen shape'
+            Alter.vision('>>> ctx_seen shape ' + str(ctx_seen.shape))
             print ctx_seen.shape
             for i, id in enumerate(ids):
                 vid, cid = id.split('_')
@@ -1412,6 +1431,7 @@ class Attention(object):
         common.dump_pkl(ctx_save, common.get_rab_dataset_base_path()+'youtube2text_iccv15/ctx_mean.pkl')
 
         print '>>> dump ctx_mean end'
+        Alter.vision('>>> dump ctx_mean end')
 
         return self.engine
     
